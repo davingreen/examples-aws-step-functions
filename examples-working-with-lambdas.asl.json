@@ -1,0 +1,242 @@
+{
+  "Comment": "This is an example step function that simply shows step functions features and conventions.",
+  "StartAt": "Hello",
+  "States": {
+    "Hello": {
+      "Comment": "A pass state. Note the result will be the input of the next state.",
+      "Type": "Pass",
+      "Result": "Hello",
+      "Next": "IAM Reminder"
+    },
+    "IAM Reminder": {
+      "Comment": "By default, step functions have scoped lambda policies (you must specify lambdas in IAM for this sFn), unless you're using the CDK",
+      "Type": "Pass",
+      "Next": "Simply invoke a Lambda function"
+    },
+    "Simply invoke a Lambda function": {
+      "Comment": "This examples function logs event (1st parameter), then returns it.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST"
+      },
+      "Next": "Lambda with payload"
+    },
+    "Lambda with payload": {
+      "Comment": "For this lambda, the imput will be ignored and Payload will be the event for the lambda",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+        "Payload": {
+          "test": "test"
+        }
+      },
+      "Next": "Lambda with state input"
+    },
+    "Lambda with state input": {
+      "Comment": "This passes the entire state (output of previous state) to be the lambda event",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+        "Payload": {
+          "Event.$": "$",
+          "StateName.$": "$$.State.Name"
+        }
+      },
+      "Next": "Lambda with input path"
+    },
+    "Lambda with input path": {
+      "Comment": "This selects part of the state to be the lambda event. In this case, it selected the output of the previous lambda and uses it as this lambda event",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+        "Payload": {
+          "Event.$": "$",
+          "StateName.$": "$$.State.Name"
+        }
+      },
+      "InputPath": "$.Payload",
+      "Next": "Lambda with timeout"
+    },
+    "Lambda with timeout": {
+      "Comment": "The sFn timeout must be less than the lambda's timeout. (Does not override it.) Note this lambda waits for the given ms.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-wait-for-input-ms:$LATEST",
+        "Payload": "10"
+      },
+      "TimeoutSeconds": 1,
+      "Next": "Lambda with retry on error"
+    },
+    "Lambda with retry on error": {
+      "Comment": "TBD",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-wait-for-input-ms:$LATEST",
+        "Payload": {
+          "ms": "invalid"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 1
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Set state empty"
+        }
+      ],
+      "Next": "Set state empty"
+    },
+    "Set state empty": {
+      "Comment": "Clears out the error state from the catch above.",
+      "Type": "Pass",
+      "Result": {},
+      "Next": "Decide on paths"
+    },
+    "Decide on paths": {
+      "Comment": "This decides on next state based on the first matching condition.",
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$",
+          "IsPresent": true,
+          "Next": "IsPresent Lambda"
+        },
+        {
+          "Variable": "$",
+          "IsPresent": false,
+          "Next": "IsNull Failure"
+        }
+      ]
+    },
+    "IsPresent Lambda": {
+      "Comment": "TBD",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+        "Payload": {
+          "Event.$": "$",
+          "StateName.$": "$$.State.Name"
+        }
+      },
+      "Next": "Set state to example for parallel"
+    },
+    "IsNull Failure": {
+      "Type": "Fail",
+      "Cause": "Something failed.",
+      "Error": "SOME_ERROR"
+    },
+    "Set state to example for parallel": {
+      "Comment": "Clears out the error state from the catch above.",
+      "Type": "Pass",
+      "Result": {
+        "1": "test1",
+        "2": "test2"
+      },
+      "Next": "Run lambdas in parallel"
+    },
+    "Run lambdas in parallel": {
+      "Comment": "TBD",
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Parallel lambda 1",
+          "States": {
+            "Parallel lambda 1": {
+              "Comment": "TBD",
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+                "Payload": {
+                  "Event.$": "$.1",
+                  "StateName.$": "$$.State.Name"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Parallel lambda 2",
+          "States": {
+            "Parallel lambda 2": {
+              "Comment": "TBD",
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+                "Payload": {
+                  "Event.$": "$.2",
+                  "StateName.$": "$$.State.Name"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "Parallel output"
+    },
+    "Parallel output": {
+      "Comment": "Shows the output of a parallel state. This simply grabs the first lambdas output fromt he state.",
+      "Type": "Pass",
+      "OutputPath": "$[0]",
+      "Next": "Create an array to show map state"
+    },
+    "Create an array to show map state": {
+      "Comment": "Shows the output of a parallel state. This simply grabs the first lambdas output fromt he state.",
+      "Type": "Pass",
+      "Result": [
+        "test1",
+        "test2"
+      ],
+      "Next": "Run lambdas in parallel for each item of an array"
+    },
+    "Run lambdas in parallel for each item of an array": {
+      "Comment": "This runs a lambda for each item of the array in (mostly) parallel.",
+      "Type": "Map",
+      "ItemsPath": "$",
+      "Iterator": {
+        "StartAt": "Lambda to run for each item",
+        "States": {
+          "Lambda to run for each item": {
+            "Comment": "TBD",
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:us-east-1:615915404165:function:examples-echo-event:$LATEST",
+              "Payload": {
+                "Event.$": "$",
+                "StateName.$": "$$.State.Name"
+              }
+            },
+            "End": true
+          }
+        }
+      },
+      "Next": "World"
+    },
+    "World": {
+      "Comment": "An ending pass state. Note the result will be the output of the step function execution.",
+      "Type": "Pass",
+      "Result": "World",
+      "End": true
+    }
+  }
+}
